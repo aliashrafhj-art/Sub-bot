@@ -1,7 +1,12 @@
-# Railway CLI দিয়ে (যদি ইন্সটল থাকে)
-railway up
+# ১. ফাইল রিনেম
+mv single_bot.py main.py
 
-# অথবা GitHub push
-git add .
-git commit -m "fix: change builder to Dockerfile"
+# ২. railway.json চেক করুন (main.py থাকা উচিত)
+cat railway.json
+
+# ৩. গিট আপডেট
+git add main.py
+git add railway.json
+git rm single_bot.py
+git commit -m "fix: renamed to main.py for proper start command"
 git push
