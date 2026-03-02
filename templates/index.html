@@ -65,6 +65,19 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        .info-text {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        .optional-badge {
+            background: #ffc107;
+            color: #000;
+            font-size: 0.8rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
@@ -75,21 +88,38 @@
             </h1>
             
             <div class="mb-4">
-                <label class="form-label fw-bold">ভিডিও লিংক দিন:</label>
+                <label class="form-label fw-bold">
+                    <i class="bi bi-link"></i> ভিডিও লিংক দিন:
+                </label>
                 <input type="url" id="urlInput" class="form-control form-control-lg" 
                        placeholder="https://dramacool9.com.ro/...">
+                <div class="info-text">
+                    <i class="bi bi-info-circle"></i> ড্রামাকুল, গোগোঅ্যানিমে, কিসসম্যান সহ যেকোনো সাইটের লিংক দিন
+                </div>
             </div>
 
             <div class="row mb-4">
                 <div class="col-md-6">
-                    <label class="form-label">বট টোকেন (ঐচ্ছিক):</label>
+                    <label class="form-label">
+                        <i class="bi bi-key"></i> বট টোকেন 
+                        <span class="optional-badge">ঐচ্ছিক</span>
+                    </label>
                     <input type="text" id="botToken" class="form-control" 
                            placeholder="টেলিগ্রাম বট টোকেন">
+                    <div class="info-text">
+                        <i class="bi bi-info-circle"></i> না দিলে Railway-এর টোকেন ব্যবহার হবে
+                    </div>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">চ্যানেল আইডি (ঐচ্ছিক):</label>
+                    <label class="form-label">
+                        <i class="bi bi-person"></i> চ্যানেল আইডি 
+                        <span class="optional-badge">ঐচ্ছিক</span>
+                    </label>
                     <input type="text" id="channelId" class="form-control" 
                            placeholder="@channel বা -100...">
+                    <div class="info-text">
+                        <i class="bi bi-info-circle"></i> না দিলে Railway-এর চ্যানেল ব্যবহার হবে
+                    </div>
                 </div>
             </div>
 
@@ -109,7 +139,9 @@
                 </div>
 
                 <div id="previewSection" style="display: none;">
-                    <h5 class="mt-4 mb-3"><i class="bi bi-eye"></i> প্রিভিউ:</h5>
+                    <h5 class="mt-4 mb-3">
+                        <i class="bi bi-eye"></i> প্রিভিউ:
+                    </h5>
                     <video id="videoPreview" class="video-preview" controls>
                         <source src="" type="video/mp4">
                     </video>
@@ -117,6 +149,9 @@
                         <a id="downloadBtn" href="#" class="btn btn-success btn-lg">
                             <i class="bi bi-download"></i> ডাউনলোড করুন
                         </a>
+                    </div>
+                    <div class="info-text text-center mt-2">
+                        <i class="bi bi-clock"></i> এই লিংক ১ ঘণ্টা পর্যন্ত valid থাকবে
                     </div>
                 </div>
             </div>
@@ -135,7 +170,15 @@
             const channelId = document.getElementById('channelId').value;
 
             if (!url) {
-                alert('দয়া করে একটি ভিডিও লিংক দিন');
+                alert('❌ দয়া করে একটি ভিডিও লিংক দিন');
+                return;
+            }
+
+            // URL ভ্যালিডেশন
+            try {
+                new URL(url);
+            } catch {
+                alert('❌ সঠিক URL দিন (http:// বা https:// দিয়ে শুরু)');
                 return;
             }
 
@@ -149,10 +192,21 @@
                 const response = await fetch('/process', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({url, bot_token: botToken, channel_id: channelId})
+                    body: JSON.stringify({
+                        url: url,
+                        bot_token: botToken || null,
+                        channel_id: channelId || null
+                    })
                 });
+                
                 const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
                 currentTaskId = data.task_id;
+                
             } catch (error) {
                 alert('এরর: ' + error.message);
                 resetButton();
@@ -181,7 +235,11 @@
                 document.getElementById('downloadBtn').href = data.video_url;
                 
                 document.getElementById('statusMessage').innerHTML = 
-                    '<i class="bi bi-check-circle text-success"></i> সম্পন্ন! ভিডিও প্রস্তুত।';
+                    '<i class="bi bi-check-circle text-success"></i> ✅ সম্পন্ন! ভিডিও প্রস্তুত।';
+                
+                // প্রগ্রেস বার ১০০% দেখাও
+                document.getElementById('progressBar').style.width = '100%';
+                document.getElementById('progressBar').innerHTML = '100%';
                 
                 resetButton();
                 
@@ -199,7 +257,7 @@
         socket.on('error', function(data) {
             if (data.task_id === currentTaskId) {
                 document.getElementById('statusMessage').innerHTML = 
-                    `<i class="bi bi-exclamation-triangle text-danger"></i> এরর: ${data.error}`;
+                    `<i class="bi bi-exclamation-triangle text-danger"></i> ❌ এরর: ${data.error}`;
                 resetButton();
             }
         });
@@ -207,7 +265,7 @@
         socket.on('done', function(data) {
             if (data.task_id === currentTaskId) {
                 document.getElementById('statusMessage').innerHTML = 
-                    `<i class="bi bi-check-circle text-success"></i> ${data.message}`;
+                    `<i class="bi bi-check-circle text-success"></i> ✅ ${data.message}`;
             }
         });
 
@@ -215,6 +273,13 @@
             document.getElementById('processBtn').disabled = false;
             document.getElementById('processBtn').innerHTML = '<i class="bi bi-play-circle"></i> প্রসেস শুরু করুন';
         }
+
+        // এন্টার চাপলে সাবমিট
+        document.getElementById('urlInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                document.getElementById('processBtn').click();
+            }
+        });
     </script>
 </body>
 </html>
