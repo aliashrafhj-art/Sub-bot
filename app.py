@@ -1,4 +1,11 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# এনভায়রনমেন্ট ভেরিয়েবল থেকে টোকেন নাও
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+CHANNEL_ID = os.getenv('CHANNEL_ID')
 import logging
 import asyncio
 import subprocess
