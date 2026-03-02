@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>অ্যানিসাব ওয়েব ডাউনলোডার</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Hind Siliguri', sans-serif;
+        }
+        .main-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin: 50px auto;
+            max-width: 800px;
+            padding: 30px;
+        }
+        .progress {
+            height: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+        .progress-bar {
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            font-weight: bold;
+            line-height: 30px;
+        }
+        .status-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #007bff;
+        }
+        .video-preview {
+            width: 100%;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: bold;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102,126,234,0.4);
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-card">
+            <h1 class="text-center mb-4">
+                <i class="bi bi-film"></i> অ্যানিসাব ওয়েব ডাউনলোডার
+            </h1>
+            
+            <div class="mb-4">
+                <label class="form-label fw-bold">ভিডিও লিংক দিন:</label>
+                <input type="url" id="urlInput" class="form-control form-control-lg" 
+                       placeholder="https://dramacool9.com.ro/...">
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="form-label">বট টোকেন (ঐচ্ছিক):</label>
+                    <input type="text" id="botToken" class="form-control" 
+                           placeholder="টেলিগ্রাম বট টোকেন">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">চ্যানেল আইডি (ঐচ্ছিক):</label>
+                    <input type="text" id="channelId" class="form-control" 
+                           placeholder="@channel বা -100...">
+                </div>
+            </div>
+
+            <button id="processBtn" class="btn btn-primary btn-lg w-100 mb-4">
+                <i class="bi bi-play-circle"></i> প্রসেস শুরু করুন
+            </button>
+
+            <!-- স্ট্যাটাস সেকশন -->
+            <div id="statusSection" style="display: none;">
+                <div class="status-box" id="statusMessage">
+                    <i class="bi bi-info-circle"></i> প্রসেসিং শুরু হচ্ছে...
+                </div>
+
+                <div class="progress">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                         style="width: 0%">0%</div>
+                </div>
+
+                <div id="previewSection" style="display: none;">
+                    <h5 class="mt-4 mb-3"><i class="bi bi-eye"></i> প্রিভিউ:</h5>
+                    <video id="videoPreview" class="video-preview" controls>
+                        <source src="" type="video/mp4">
+                    </video>
+                    <div class="d-grid gap-2 mt-3">
+                        <a id="downloadBtn" href="#" class="btn btn-success btn-lg">
+                            <i class="bi bi-download"></i> ডাউনলোড করুন
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        let currentTaskId = null;
+
+        document.getElementById('processBtn').addEventListener('click', async function() {
+            const url = document.getElementById('urlInput').value;
+            const botToken = document.getElementById('botToken').value;
+            const channelId = document.getElementById('channelId').value;
+
+            if (!url) {
+                alert('দয়া করে একটি ভিডিও লিংক দিন');
+                return;
+            }
+
+            // UI আপডেট
+            document.getElementById('statusSection').style.display = 'block';
+            document.getElementById('previewSection').style.display = 'none';
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('processBtn').innerHTML = '<span class="loading-spinner"></span> প্রসেসিং...';
+
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url, bot_token: botToken, channel_id: channelId})
+                });
+                const data = await response.json();
+                currentTaskId = data.task_id;
+            } catch (error) {
+                alert('এরর: ' + error.message);
+                resetButton();
+            }
+        });
+
+        socket.on('status', function(data) {
+            if (data.task_id === currentTaskId) {
+                document.getElementById('statusMessage').innerHTML = 
+                    `<i class="bi bi-arrow-repeat"></i> ${data.message}`;
+            }
+        });
+
+        socket.on('progress', function(data) {
+            if (data.task_id === currentTaskId && data.stage === 'download') {
+                const progress = Math.round(data.progress);
+                document.getElementById('progressBar').style.width = progress + '%';
+                document.getElementById('progressBar').innerHTML = progress + '%';
+            }
+        });
+
+        socket.on('preview', function(data) {
+            if (data.task_id === currentTaskId) {
+                document.getElementById('previewSection').style.display = 'block';
+                document.getElementById('videoPreview').src = data.video_url;
+                document.getElementById('downloadBtn').href = data.video_url;
+                
+                document.getElementById('statusMessage').innerHTML = 
+                    '<i class="bi bi-check-circle text-success"></i> সম্পন্ন! ভিডিও প্রস্তুত।';
+                
+                resetButton();
+                
+                // ১ ঘণ্টা পরে ক্লিনআপ
+                setTimeout(() => {
+                    fetch('/cleanup', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({task_id: currentTaskId})
+                    });
+                }, 3600000);
+            }
+        });
+
+        socket.on('error', function(data) {
+            if (data.task_id === currentTaskId) {
+                document.getElementById('statusMessage').innerHTML = 
+                    `<i class="bi bi-exclamation-triangle text-danger"></i> এরর: ${data.error}`;
+                resetButton();
+            }
+        });
+
+        socket.on('done', function(data) {
+            if (data.task_id === currentTaskId) {
+                document.getElementById('statusMessage').innerHTML = 
+                    `<i class="bi bi-check-circle text-success"></i> ${data.message}`;
+            }
+        });
+
+        function resetButton() {
+            document.getElementById('processBtn').disabled = false;
+            document.getElementById('processBtn').innerHTML = '<i class="bi bi-play-circle"></i> প্রসেস শুরু করুন';
+        }
+    </script>
+</body>
+</html>
