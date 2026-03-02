@@ -1,5 +1,3 @@
-# single_bot.py - পুরো বট এক ফাইলে
-
 import os
 import logging
 import asyncio
@@ -45,7 +43,7 @@ class DownloadError(Exception):
 class BurnError(Exception):
     pass
 
-# ================== এক্সট্র্যাক্টর ==================
+# ================== এক্সট্র্যাক্টর (yt-dlp) ==================
 async def extract_info(url: str) -> dict:
     def _sync_extract():
         ydl_opts = {
@@ -99,52 +97,29 @@ async def extract_info(url: str) -> dict:
         'ext': info.get('ext', 'mp4')
     }
 
-# ================== ডাউনলোডার ==================
-async def download_video(url: str, chat_id: int, progress_callback=None) -> str:
-    output_path = Path(gettempdir()) / f"video_{chat_id}.mp4"
-
-    if url.endswith('.m3u8'):
-        cmd = ['ffmpeg', '-i', url, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', str(output_path)]
-        logger.info(f"Downloading HLS stream: {url}")
-        process = await asyncio.create_subprocess_exec(
-            *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
-        if process.returncode != 0:
-            logger.error(f"FFmpeg error: {stderr.decode()}")
-            raise DownloadError("FFmpeg HLS download failed")
-        logger.info(f"HLS download completed: {output_path}")
-    else:
-        logger.info(f"Downloading direct video: {url}")
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                resp.raise_for_status()
-                total_size = int(resp.headers.get('content-length', 0))
-                downloaded = 0
-                async with aiofiles.open(output_path, 'wb') as f:
-                    async for chunk in resp.content.iter_chunked(8192):
-                        await f.write(chunk)
-                        downloaded += len(chunk)
-                        if progress_callback and total_size:
-                            await progress_callback(downloaded, total_size)
-        logger.info(f"Direct download completed: {output_path}")
-
-    return str(output_path)
-
+# ================== ডাউনলোডার (Referer হেডার সহ) ==================
 async def download_video(url: str, chat_id: int, progress_callback=None) -> str:
     output_path = Path(gettempdir()) / f"video_{chat_id}.mp4"
     
-    # m3u8 লিংক হলে
     if '.m3u8' in url:
-    headers = {
-        'Referer': 'https://dramacool9.com.ro/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
-    header_args = []
-    for key, value in headers.items():
-        header_args.extend(['-headers', f'{key}: {value}'])
-    cmd = ['ffmpeg', '-i', url, *header_args, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-y', str(output_path)]
-     
+        headers = {
+            'Referer': 'https://dramacool9.com.ro/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        header_args = []
+        for key, value in headers.items():
+            header_args.extend(['-headers', f'{key}: {value}'])
+        
+        cmd = [
+            'ffmpeg',
+            '-i', url,
+            *header_args,
+            '-c', 'copy',
+            '-bsf:a', 'aac_adtstoasc',
+            '-y',
+            str(output_path)
+        ]
+        
         logger.info(f"Downloading HLS stream with referer: {url}")
         process = await asyncio.create_subprocess_exec(
             *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -155,7 +130,6 @@ async def download_video(url: str, chat_id: int, progress_callback=None) -> str:
             logger.error(f"FFmpeg error: {stderr.decode()}")
             raise DownloadError("FFmpeg HLS download failed")
     else:
-        # সরাসরি HTTP ডাউনলোড
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 resp.raise_for_status()
@@ -165,7 +139,20 @@ async def download_video(url: str, chat_id: int, progress_callback=None) -> str:
     
     logger.info(f"Download completed: {output_path}")
     return str(output_path)
-======== সাবটাইটেল স্টাইলার ==================
+
+async def download_subtitle(url: str, chat_id: int) -> str:
+    output_path = Path(gettempdir()) / f"sub_{chat_id}.srt"
+    logger.info(f"Downloading subtitle: {url}")
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            resp.raise_for_status()
+            async with aiofiles.open(output_path, 'wb') as f:
+                async for chunk in resp.content.iter_chunked(8192):
+                    await f.write(chunk)
+    logger.info(f"Subtitle downloaded: {output_path}")
+    return str(output_path)
+
+# ================== সাবটাইটেল স্টাইলার ==================
 async def style_subtitle(subtitle_path: str, font_path: str) -> str:
     subs = pysubs2.load(subtitle_path, encoding="utf-8")
     logger.info(f"Loaded subtitle: {subtitle_path}")
@@ -249,8 +236,8 @@ async def upload_to_telegram(bot, channel_id: str, file_path: str, caption: str 
 # ================== বট হ্যান্ডলার ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "স্বাগতম! ভিডিও প্রসেস করতে একটি এপিসোড লিংক পাঠান।\n"
-        "উদাহরণ: https://example.com/episode-123"
+        "স্বাগতম! ভিডিও প্রসেস করতে একটি লিংক পাঠান।\n"
+        "সরাসরি .m3u8 বা .mp4 লিংক দিলে দ্রুত কাজ করবে।"
     )
 
 async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -261,7 +248,6 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # সরাসরি মিডিয়া লিংক চেক
     if '.m3u8' in url or '.mp4' in url:
-        # সরাসরি ডাউনলোডে যাবে
         try:
             video_path = await download_video(url, chat_id)
             user_sessions[chat_id] = {'video_path': video_path, 'title': 'video'}
@@ -275,12 +261,10 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.edit_text(f"❌ অজানা ত্রুটি: {e}")
             return
 
-    # যদি মিডিয়া লিংক না হয়, তাহলে নিচের পুরনো কোড চলবে
+    # যদি পেজ লিংক হয়
     try:
         info = await extract_info(url)
-        # বাকি পুরনো কোড...
-        # (নিচের অংশ অপরিবর্তিত রাখো)
-await msg.edit_text("✅ ভিডিও তথ্য পাওয়া গেছে। ডাউনলোড শুরু...")
+        await msg.edit_text("✅ ভিডিও তথ্য পাওয়া গেছে। ডাউনলোড শুরু...")
 
         async def progress(downloaded, total):
             percent = (downloaded / total) * 100
@@ -313,8 +297,8 @@ await msg.edit_text("✅ ভিডিও তথ্য পাওয়া গেছ�
             return
         else:
             user_sessions[chat_id] = {'video_path': video_path, 'title': info['title']}
-            await msg.edit_text("কোনো সাবটাইটেল পাওয়া যায়নি। অনুগ্রহ করে আপনার বাংলা সাবটাইটেল ফাইল (.srt বা .ass) আপলোড করুন।")
-            return WAITING_SUBTITLE
+            await msg.edit_text("কোনো সাবটাইটেল পাওয়া যায়নি। সরাসরি ভিডিও আপলোড করা হবে।")
+            await process_video(chat_id, context)
 
     except ExtractionError as e:
         logger.error(f"Extraction error: {e}")
@@ -326,8 +310,6 @@ await msg.edit_text("✅ ভিডিও তথ্য পাওয়া গেছ�
         logger.exception("Unexpected error in handle_link")
         await msg.edit_text(f"❌ অজানা ত্রুটি: {e}")
 
-    return ConversationHandler.END
-
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -338,7 +320,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("⏳ সাবটাইটেল প্রস্তুত করা হচ্ছে...")
         await process_video(chat_id, context)
     elif data == 'upload_own':
-        await query.edit_message_text("📂 অনুগ্রহ করে আপনার বাংলা সাবটাইটেল ফাইল আপলোড করুন।")
+        await query.edit_message_text("📂 অনুগ্রহ করে আপনার বাংলা সাবটাইটেল ফাইল (.srt বা .ass) আপলোড করুন।")
         return WAITING_SUBTITLE
 
 async def handle_subtitle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -398,7 +380,7 @@ async def process_video(chat_id, context: ContextTypes.DEFAULT_TYPE):
         logger.exception("Error in process_video")
         await context.bot.send_message(chat_id, f"❌ প্রসেসিংয়ে ত্রুটি: {e}")
     finally:
-        for path in [video_path, subtitle_path, 'styled_sub' in locals() and styled_sub, 'output_path' in locals() and output_path]:
+        for path in [video_path, subtitle_path, styled_sub if 'styled_sub' in locals() else None, output_path if 'output_path' in locals() else None]:
             if path and os.path.exists(str(path)):
                 os.remove(str(path))
         if chat_id in user_sessions:
