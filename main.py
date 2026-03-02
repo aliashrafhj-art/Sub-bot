@@ -131,19 +131,53 @@ async def download_video(url: str, chat_id: int, progress_callback=None) -> str:
 
     return str(output_path)
 
-async def download_subtitle(url: str, chat_id: int) -> str:
-    output_path = Path(gettempdir()) / f"sub_{chat_id}.srt"
-    logger.info(f"Downloading subtitle: {url}")
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            resp.raise_for_status()
-            async with aiofiles.open(output_path, 'wb') as f:
-                async for chunk in resp.content.iter_chunked(8192):
-                    await f.write(chunk)
-    logger.info(f"Subtitle downloaded: {output_path}")
+async def download_video(url: str, chat_id: int, progress_callback=None) -> str:
+    output_path = Path(gettempdir()) / f"video_{chat_id}.mp4"
+    
+    # m3u8 লিংক হলে
+    if '.m3u8' in url:
+        # Referer হেডার সহ ffmpeg চালাও
+        headers = {
+            'Referer': 'https://dramacool9.com.ro/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        # headers কে ffmpeg আর্গুমেন্টে রূপান্তর
+        header_args = []
+        for key, value in headers.items():
+            header_args.extend(['-headers', f'{key}: {value}'])
+        
+        cmd = [
+            'ffmpeg',
+            '-i', url,
+            *header_args,
+            '-c', 'copy',
+            '-bsf:a', 'aac_adtstoasc',
+            '-y',
+            str(output_path)
+        ]
+        
+        logger.info(f"Downloading HLS stream with referer: {url}")
+        process = await asyncio.create_subprocess_exec(
+            *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            logger.error(f"FFmpeg error: {stderr.decode()}")
+            raise DownloadError("FFmpeg HLS download failed")
+    else:
+        # সরাসরি HTTP ডাউনলোড
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                resp.raise_for_status()
+                async with aiofiles.open(output_path, 'wb') as f:
+                    async for chunk in resp.content.iter_chunked(8192):
+                        await f.write(chunk)
+    
+    logger.info(f"Download completed: {output_path}")
     return str(output_path)
-
-# ================== সাবটাইটেল স্টাইলার ==================
+======== সাবটাইটেল স্টাইলার ==================
 async def style_subtitle(subtitle_path: str, font_path: str) -> str:
     subs = pysubs2.load(subtitle_path, encoding="utf-8")
     logger.info(f"Loaded subtitle: {subtitle_path}")
