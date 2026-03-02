@@ -292,19 +292,16 @@ def index():
 
 @app.route('/process', methods=['POST'])
 def process():
-    """ভিডিও প্রসেসিং শুরু করে"""
     url = request.json.get('url')
-    bot_token = request.json.get('bot_token')
-    channel_id = request.json.get('channel_id')
     
     if not url:
         return jsonify({'error': 'URL is required'}), 400
     
     task_id = uuid.uuid4().hex[:8]
     
-    # ব্যাকগ্রাউন্ড টাস্ক শুরু
+    # ব্যাকগ্রাউন্ড টাস্ক শুরু (এনভায়রনমেন্ট ভেরিয়েবল পাঠাচ্ছে)
     threading.Thread(
-        target=lambda: asyncio.run(process_video_task(url, task_id, bot_token, channel_id))
+        target=lambda: asyncio.run(process_video_task(url, task_id, BOT_TOKEN, CHANNEL_ID))
     ).start()
     
     return jsonify({'task_id': task_id})
