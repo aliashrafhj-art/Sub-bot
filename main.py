@@ -259,9 +259,28 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = await update.message.reply_text("⏳ লিংক প্রসেস করা হচ্ছে...")
 
+    # সরাসরি মিডিয়া লিংক চেক
+    if '.m3u8' in url or '.mp4' in url:
+        # সরাসরি ডাউনলোডে যাবে
+        try:
+            video_path = await download_video(url, chat_id)
+            user_sessions[chat_id] = {'video_path': video_path, 'title': 'video'}
+            await msg.edit_text("✅ ভিডিও ডাউনলোড সম্পন্ন। সাবটাইটেল নেই (সরাসরি লিংক)।")
+            await process_video(chat_id, context)
+            return
+        except DownloadError as e:
+            await msg.edit_text(f"❌ ডাউনলোড ব্যর্থ: {e}")
+            return
+        except Exception as e:
+            await msg.edit_text(f"❌ অজানা ত্রুটি: {e}")
+            return
+
+    # যদি মিডিয়া লিংক না হয়, তাহলে নিচের পুরনো কোড চলবে
     try:
         info = await extract_info(url)
-        await msg.edit_text("✅ ভিডিও তথ্য পাওয়া গেছে। ডাউনলোড শুরু...")
+        # বাকি পুরনো কোড...
+        # (নিচের অংশ অপরিবর্তিত রাখো)
+await msg.edit_text("✅ ভিডিও তথ্য পাওয়া গেছে। ডাউনলোড শুরু...")
 
         async def progress(downloaded, total):
             percent = (downloaded / total) * 100
