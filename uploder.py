@@ -33,3 +33,11 @@ async def upload_to_telegram(bot: Bot, channel_id: str, file_path: str, caption:
             if attempt == max_retries - 1:
                 raise
             await asyncio.sleep(10)
+            # uploader.py তে ডিবাগ লগ যোগ করুন
+async def upload_to_telegram(bot: Bot, channel_id: str, file_path: str, caption: str = ""):
+    logger.info(f"Attempting to upload to channel: {channel_id}")
+    try:
+        # ... existing code ...
+    except Exception as e:
+        logger.error(f"Channel {channel_id} upload failed: {e}")
+        raise
