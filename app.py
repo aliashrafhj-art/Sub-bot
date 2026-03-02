@@ -1,11 +1,4 @@
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# এনভায়রনমেন্ট ভেরিয়েবল থেকে টোকেন নাও
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-CHANNEL_ID = os.getenv('CHANNEL_ID')
 import logging
 import asyncio
 import subprocess
@@ -22,13 +15,20 @@ from werkzeug.utils import secure_filename
 import time
 import threading
 import uuid
+from dotenv import load_dotenv
 
 # ================== কনফিগারেশন ==================
+load_dotenv()
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
 app.config['UPLOAD_FOLDER'] = 'downloads'
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2GB
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# এনভায়রনমেন্ট ভেরিয়েবল থেকে টোকেন নাও
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+CHANNEL_ID = os.getenv('CHANNEL_ID')
 
 # ফোল্ডার তৈরি
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -274,7 +274,7 @@ async def process_video_task(url, task_id, bot_token=None, channel_id=None):
             'thumbnail': info.get('thumbnail', '')
         })
         
-        # ৭. টেলিগ্রাম আপলোড (যদি টোকেন দেওয়া থাকে)
+        # ৭. টেলিগ্রাম আপলোড (শুধু যদি টোকেন দেওয়া থাকে)
         if bot_token and channel_id:
             socketio.emit('status', {'task_id': task_id, 'message': 'টেলিগ্রামে আপলোড হচ্ছে...'})
             await upload_to_telegram(final_path, info['title'], bot_token, channel_id)
@@ -292,16 +292,28 @@ def index():
 
 @app.route('/process', methods=['POST'])
 def process():
-    url = request.json.get('url')
+    """ভিডিও প্রসেসিং শুরু করে"""
+    data = request.json
+    url = data.get('url')
+    
+    # ইউজার থেকে টোকেন ও চ্যানেল আইডি নাও (যদি দেয়)
+    bot_token = data.get('bot_token')
+    channel_id = data.get('channel_id')
+    
+    # ইউজার না দিলে Railway-এর এনভায়রনমেন্ট ভেরিয়েবল ব্যবহার করো
+    if not bot_token and BOT_TOKEN:
+        bot_token = BOT_TOKEN
+    if not channel_id and CHANNEL_ID:
+        channel_id = CHANNEL_ID
     
     if not url:
         return jsonify({'error': 'URL is required'}), 400
     
     task_id = uuid.uuid4().hex[:8]
     
-    # ব্যাকগ্রাউন্ড টাস্ক শুরু (এনভায়রনমেন্ট ভেরিয়েবল পাঠাচ্ছে)
+    # ব্যাকগ্রাউন্ড টাস্ক শুরু
     threading.Thread(
-        target=lambda: asyncio.run(process_video_task(url, task_id, BOT_TOKEN, CHANNEL_ID))
+        target=lambda: asyncio.run(process_video_task(url, task_id, bot_token, channel_id))
     ).start()
     
     return jsonify({'task_id': task_id})
@@ -326,4 +338,6 @@ def cleanup():
 
 # ================== মেইন ==================
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    # Railway-এর জন্য পোর্ট সেট করা
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
