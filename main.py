@@ -6,6 +6,7 @@ import aiohttp
 import aiofiles
 from pathlib import Path
 from tempfile import gettempdir
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ConversationHandler, filters, ContextTypes
@@ -102,16 +103,22 @@ async def download_video(url: str, chat_id: int, progress_callback=None) -> str:
     output_path = Path(gettempdir()) / f"video_{chat_id}.mp4"
     
     if '.m3u8' in url:
+        # লিংক থেকে ডোমেইন বের করে Referer বানাও
+        parsed = urlparse(url)
+        referer = f"{parsed.scheme}://{parsed.netloc}/"
+        
         headers = {
-            'Referer': 'https://dramacool9.com.ro/',
+            'Referer': referer,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         header_args = []
         for key, value in headers.items():
             header_args.extend(['-headers', f'{key}: {value}'])
         
+        # ffmpeg কমান্ডে `-v debug` যোগ করছি, যাতে error দেখায়
         cmd = [
             'ffmpeg',
+            '-v', 'debug',      # এই লাইনটা যোগ করো
             '-i', url,
             *header_args,
             '-c', 'copy',
@@ -120,15 +127,18 @@ async def download_video(url: str, chat_id: int, progress_callback=None) -> str:
             str(output_path)
         ]
         
-        logger.info(f"Downloading HLS stream with referer: {url}")
+        logger.info(f"Downloading HLS stream with referer: {referer}")
         process = await asyncio.create_subprocess_exec(
             *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         stdout, stderr = await process.communicate()
         
+        # stderr লগ করো (এখানে ffmpeg error থাকবে)
+        if stderr:
+            logger.error(f"FFmpeg stderr: {stderr.decode()}")
+        
         if process.returncode != 0:
-            logger.error(f"FFmpeg error: {stderr.decode()}")
-            raise DownloadError("FFmpeg HLS download failed")
+            raise DownloadError(f"FFmpeg HLS download failed (return code {process.returncode})")
     else:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
