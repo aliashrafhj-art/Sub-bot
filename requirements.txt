@@ -9,3 +9,4 @@ httpx==0.25.2
 Werkzeug==2.3.7
 eventlet==0.33.3
 python-dotenv==1.0.0
+gunicorn==21.2.0
