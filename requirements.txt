@@ -10,3 +10,4 @@ Werkzeug==2.3.7
 eventlet==0.33.3
 python-dotenv==1.0.0
 gunicorn==21.2.0
+yt-dlp>=2025.02.19
