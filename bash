@@ -1,19 +1,7 @@
-# railway.json তৈরি
-echo '{
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": {
-    "builder": "DOCKERFILE",
-    "dockerfilePath": "Dockerfile"
-  },
-  "deploy": {
-    "numReplicas": 1,
-    "startCommand": "python main.py",
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 10
-  }
-}' > railway.json
+# Railway CLI দিয়ে (যদি ইন্সটল থাকে)
+railway up
 
-# গিট এড ও কমিট
-git add railway.json
-git commit -m "added railway.json with start command"
+# অথবা GitHub push
+git add .
+git commit -m "fix: change builder to Dockerfile"
 git push
